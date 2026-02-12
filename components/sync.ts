@@ -1,21 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
 import { db } from "./db";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
 export type SyncPayload = {
+  version: 1;
+  exportedAt: number;
   startDateISO?: string;
   selectedDateISO?: string;
   logs: any[];
   planOverrides: any[];
   dayMeta: any[];
-  exportedAt: number;
 };
 
-// собрать все данные из IndexedDB (Dexie)
 export async function exportAll(): Promise<SyncPayload> {
   const [logs, planOverrides, dayMeta] = await Promise.all([
     db.logs.toArray(),
@@ -23,25 +18,27 @@ export async function exportAll(): Promise<SyncPayload> {
     db.dayMeta.toArray(),
   ]);
 
-  const startDateISO = (typeof window !== "undefined")
-    ? window.localStorage.getItem("prikorm.startDateISO") ?? undefined
-    : undefined;
+  const startDateISO =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("prikorm.startDateISO") ?? undefined
+      : undefined;
 
-  const selectedDateISO = (typeof window !== "undefined")
-    ? window.localStorage.getItem("prikorm.selectedDateISO") ?? undefined
-    : undefined;
+  const selectedDateISO =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("prikorm.selectedDateISO") ?? undefined
+      : undefined;
 
   return {
+    version: 1,
+    exportedAt: Date.now(),
+    startDateISO,
+    selectedDateISO,
     logs,
     planOverrides,
     dayMeta,
-    startDateISO,
-    selectedDateISO,
-    exportedAt: Date.now(),
   };
 }
 
-// применить данные в IndexedDB
 export async function importAll(payload: SyncPayload) {
   await db.transaction("rw", db.logs, db.planOverrides, db.dayMeta, async () => {
     await db.logs.clear();
@@ -57,4 +54,27 @@ export async function importAll(payload: SyncPayload) {
     if (payload.startDateISO) window.localStorage.setItem("prikorm.startDateISO", payload.startDateISO);
     if (payload.selectedDateISO) window.localStorage.setItem("prikorm.selectedDateISO", payload.selectedDateISO);
   }
+}
+
+export async function pushToCloud(familyCode: string) {
+  const payload = await exportAll();
+
+  const { error } = await supabase
+    .from("family_state")
+    .upsert({ family_code: familyCode, payload, updated_at: new Date().toISOString() });
+
+  if (error) throw error;
+}
+
+export async function pullFromCloud(familyCode: string): Promise<SyncPayload> {
+  const { data, error } = await supabase
+    .from("family_state")
+    .select("payload")
+    .eq("family_code", familyCode)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data?.payload) throw new Error("По этому коду в облаке пока нет данных. Сначала нажми «Отправить в облако».");
+
+  return data.payload as SyncPayload;
 }
