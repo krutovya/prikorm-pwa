@@ -1,13 +1,21 @@
-export type CategoryKey = "formula" | "vegetable" | "fruit" | "porridge" | "meat" | "dairy" | "water" | "other";
+export type CategoryKey =
+  | "formula"
+  | "vegetable"
+  | "fruit"
+  | "porridge"
+  | "meat"
+  | "dairy"
+  | "water"
+  | "other";
 
 export interface Category {
   key: CategoryKey;
   label: string;
   icon: string;
-  colorClass: string;   // tailwind class for left stripe
+  colorClass: string; // tailwind class for left stripe
 }
 
-// Простая эвристика: по ключевым словам в planText
+// Единый справочник (истина)
 export const categories: Category[] = [
   { key: "formula",   label: "Смесь/молоко", icon: "🍼", colorClass: "bg-sky-500" },
   { key: "vegetable", label: "Овощи",        icon: "🥦", colorClass: "bg-emerald-500" },
@@ -19,10 +27,11 @@ export const categories: Category[] = [
   { key: "other",     label: "Другое",       icon: "🍽️", colorClass: "bg-gray-500" },
 ];
 
-export function detectCategory(planText: string) {
-  const t = (planText || "").toLowerCase();
+// Для быстрого доступа по ключу
+const CAT = Object.fromEntries(categories.map(c => [c.key, c])) as Record<CategoryKey, Category>;
 
-  // помощник
+export function detectCategory(planText: string): Category {
+  const t = (planText || "").toLowerCase();
   const has = (arr: string[]) => arr.some(w => t.includes(w));
 
   // ключевые слова (можно расширять)
@@ -32,33 +41,22 @@ export function detectCategory(planText: string) {
   const FRUIT = ["яблок", "груш", "банан", "слив", "персик", "абрик", "фрукт", "пюре фрукт"];
   const DAIRY = ["йогурт", "кефир", "творог", "ряженк", "биолакт", "молочн"];
   const DRINKS = ["вода", "чай", "компот", "сок"];
-  const FORMULA = ["смесь", "гв", "ив", "молоко"]; // “молоко” оставим тут, но ниже будет приоритет у молочного/дринков/еды
+  const FORMULA = ["смесь", "гв", "ив"]; // "молоко" специально НЕ тут, чтобы не спорить с молочным
 
-  // ✅ ВАЖНО: сначала проверяем “еду”, а уже потом смесь
-  if (has(MEAT)) {
-    return { key: "meat", label: "Мясо/рыба", icon: "🍗", colorClass: "bg-orange-500" };
-  }
-  if (has(PORRIDGE)) {
-    return { key: "porridge", label: "Каши", icon: "🥣", colorClass: "bg-amber-500" };
-  }
-  if (has(VEG)) {
-    return { key: "veg", label: "Овощи", icon: "🥦", colorClass: "bg-emerald-500" };
-  }
-  if (has(FRUIT)) {
-    return { key: "fruit", label: "Фрукты", icon: "🍎", colorClass: "bg-rose-500" };
-  }
-  if (has(DAIRY)) {
-    return { key: "dairy", label: "Молочное", icon: "🥛", colorClass: "bg-sky-500" };
-  }
-  if (has(DRINKS)) {
-    return { key: "drinks", label: "Напитки", icon: "💧", colorClass: "bg-cyan-500" };
-  }
+  // ✅ Приоритет "еды" выше смеси
+  if (has(MEAT)) return CAT.meat;
+  if (has(PORRIDGE)) return CAT.porridge;
+  if (has(VEG)) return CAT.vegetable;
+  if (has(FRUIT)) return CAT.fruit;
+  if (has(DAIRY)) return CAT.dairy;
+  if (has(DRINKS)) return CAT.water;
 
-  // ✅ Смесь/молоко — ТОЛЬКО если не нашлось ничего выше
-  if (has(FORMULA)) {
-    return { key: "formula", label: "Смесь/молоко", icon: "🍼", colorClass: "bg-blue-500" };
-  }
+  // Смесь — только если не нашлось ничего выше
+  if (has(FORMULA) || t.includes("смесь")) return CAT.formula;
 
-  return { key: "other", label: "Другое", icon: "🍽️", colorClass: "bg-gray-500" };
+  // "молоко" одиночное (без йогурта/кефира/творога) — чаще как смесь/молочное?
+  // Оставим как "Смесь/молоко" для простоты:
+  if (t.includes("молоко")) return CAT.formula;
+
+  return CAT.other;
 }
-
