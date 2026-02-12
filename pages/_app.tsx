@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { startAutoSync } from "../components/autoSync";
 import "../styles/globals.css";
 import type { AppProps } from "next/app";
 import Head from "next/head";
