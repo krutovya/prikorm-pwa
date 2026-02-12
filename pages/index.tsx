@@ -27,7 +27,7 @@ export default function TodayPage() {
   const [startDateISO, setStartDateISO] = useState<string>(todayISO());
   const [startLoaded, setStartLoaded] = useState(false);
 
-  // ✅ Новое: выбранная дата для отметок (можно прошлые дни)
+  // выбранная дата для отметок (можно прошлые дни)
   const [selectedDateISO, setSelectedDateISO] = useState<string>(todayISO());
   const [selectedLoaded, setSelectedLoaded] = useState(false);
 
@@ -109,7 +109,7 @@ export default function TodayPage() {
     };
   }, [basePlanDay, dayOverrides]);
 
-  // ✅ Логи теперь зависят от selectedDateISO (можно прошлые даты)
+  // Логи зависят от selectedDateISO (можно прошлые даты)
   const logs = useLiveQuery(async () => {
     return db.logs.where({ dayIndex, dateISO: selectedDateISO }).toArray();
   }, [dayIndex, selectedDateISO]);
@@ -175,15 +175,26 @@ export default function TodayPage() {
     setSelectedDateISO(`${yyyy}-${mm}-${dd}`);
   }
 
+  // общий стиль для iOS date input
+  const dateInputClass =
+    "w-full box-border rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 text-sm leading-5";
+  const dateInputStyle = { WebkitAppearance: "none", appearance: "none" } as any;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="mx-auto max-w-md px-4 pt-6">
-        <div className={"rounded-3xl p-5 text-white " + (allDone ? "bg-emerald-600" : "bg-gray-900")}>
-          {/* ✅ показываем выбранную дату */}
+        <div
+          className={
+            "rounded-3xl p-5 text-white overflow-hidden " +
+            (allDone ? "bg-emerald-600" : "bg-gray-900")
+          }
+        >
+          {/* показываем выбранную дату */}
           <div className="text-sm opacity-90">{format(isoToDate(selectedDateISO), "dd.MM.yyyy")}</div>
           <div className="mt-1 text-2xl font-extrabold">Сегодня</div>
 
-          <div className="mt-2 flex items-center gap-2">
+          {/* важно: flex-wrap чтобы бейджи не распирали блок на узких экранах */}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
             <Badge tone={allDone ? "ok" : "neutral"}>
               {doneCount}/{planDay?.feedings.length ?? 6} выполнено
             </Badge>
@@ -192,27 +203,42 @@ export default function TodayPage() {
 
           <div className="mt-4">
             <label className="text-xs opacity-90">Дата старта прикорма (для расчёта “Дня N”)</label>
-            <input
-              type="date"
-              value={startDateISO}
-              onChange={(e) => setStartDateISO(e.target.value)}
-              className="mt-1 w-full rounded-xl px-3 py-2 text-gray-900"
-            />
+
+            {/* overflow-hidden + box-border + appearance none = iOS fix */}
+            <div className="mt-1 w-full overflow-hidden rounded-xl">
+              <input
+                type="date"
+                value={startDateISO}
+                onChange={(e) => setStartDateISO(e.target.value)}
+                className={dateInputClass}
+                style={dateInputStyle}
+              />
+            </div>
           </div>
 
-          {/* ✅ Новый блок: выбрать дату для отметки (в т.ч. прошлые) */}
           <div className="mt-3">
             <label className="text-xs opacity-90">Дата, которую отмечаем (можно прошлые дни)</label>
-            <input
-              type="date"
-              value={selectedDateISO}
-              onChange={(e) => setSelectedDateISO(e.target.value)}
-              className="mt-1 w-full rounded-xl px-3 py-2 text-gray-900"
-            />
+
+            <div className="mt-1 w-full overflow-hidden rounded-xl">
+              <input
+                type="date"
+                value={selectedDateISO}
+                onChange={(e) => setSelectedDateISO(e.target.value)}
+                className={dateInputClass}
+                style={dateInputStyle}
+              />
+            </div>
+
             <div className="mt-2 flex gap-2">
-              <SecondaryButton onClick={() => shiftDay(-1)} className="w-full">← День</SecondaryButton>
-              <SecondaryButton onClick={goToday} className="w-full">Сегодня</SecondaryButton>
-              <SecondaryButton onClick={() => shiftDay(1)} className="w-full">День →</SecondaryButton>
+              <SecondaryButton onClick={() => shiftDay(-1)} className="w-full">
+                ← День
+              </SecondaryButton>
+              <SecondaryButton onClick={goToday} className="w-full">
+                Сегодня
+              </SecondaryButton>
+              <SecondaryButton onClick={() => shiftDay(1)} className="w-full">
+                День →
+              </SecondaryButton>
             </div>
           </div>
         </div>
@@ -240,7 +266,10 @@ export default function TodayPage() {
                       </div>
 
                       <div className="shrink-0">
-                        <PrimaryButton onClick={() => toggleDone(f.time, f.planText)} className={done ? "bg-emerald-600" : ""}>
+                        <PrimaryButton
+                          onClick={() => toggleDone(f.time, f.planText)}
+                          className={done ? "bg-emerald-600" : ""}
+                        >
                           {done ? "✅ Выполнено" : "Отметить"}
                         </PrimaryButton>
                       </div>
@@ -258,7 +287,9 @@ export default function TodayPage() {
 
                         <select
                           defaultValue={log?.reaction ?? ""}
-                          onChange={(e) => setDetails(f.time, { reaction: (e.target.value || undefined) as Reaction | undefined })}
+                          onChange={(e) =>
+                            setDetails(f.time, { reaction: (e.target.value || undefined) as Reaction | undefined })
+                          }
                           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
                         >
                           <option value="">Реакция (если была)</option>
