@@ -11,6 +11,32 @@ import { exportAllForSync, importAllForSync } from "./syncPayload";
 
 const LS_CODE = "prikorm.familyCode";
 const LS_REMOTE_TS = "prikorm.remoteUpdatedAt"; // строка timestamptz
+const LS_SYNC_STATUS = "prikorm.sync.status"; // "ok" | "error" | "idle"
+const LS_SYNC_PUSH_AT = "prikorm.sync.lastPushAt"; // ISO string
+const LS_SYNC_PULL_AT = "prikorm.sync.lastPullAt"; // ISO string
+const LS_SYNC_ERROR = "prikorm.sync.lastError"; // string
+
+function setSyncStatus(status: "ok" | "error" | "idle") {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LS_SYNC_STATUS, status);
+}
+
+function setSyncPushAt() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LS_SYNC_PUSH_AT, new Date().toISOString());
+}
+
+function setSyncPullAt() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LS_SYNC_PULL_AT, new Date().toISOString());
+}
+
+function setSyncError(msg: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LS_SYNC_ERROR, msg);
+  setSyncStatus("error");
+}
+
 
 let started = false;
 let pushTimer: any = null;
