@@ -142,14 +142,27 @@ export function startAutoSync(intervalMs = 15000) {
     void pullNow();
   });
 
-  // 5) Пуш при любых изменениях в Dexie
-  // Dexie событие changes доступно в Dexie 3+
-  db.on("changes", (changes) => {
-    // если никаких реальных изменений — пропускаем
-    if (!changes || changes.length === 0) return;
+    // 5) Пуш при любых изменениях в Dexie (табличные хуки — без проблем с типами)
+  const trigger = () => {
     if (!navigator.onLine) return;
     debouncePush(1200);
-  });
+  };
+
+  // Отметки кормлений
+  db.logs.hook("creating", trigger);
+  db.logs.hook("updating", trigger);
+  db.logs.hook("deleting", trigger);
+
+  // Правки плана
+  db.planOverrides.hook("creating", trigger);
+  db.planOverrides.hook("updating", trigger);
+  db.planOverrides.hook("deleting", trigger);
+
+  // Метаданные дня (фокус)
+  db.dayMeta.hook("creating", trigger);
+  db.dayMeta.hook("updating", trigger);
+  db.dayMeta.hook("deleting", trigger);
+
 }
 
 export function stopAutoSync() {
