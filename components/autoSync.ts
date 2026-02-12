@@ -11,6 +11,8 @@ import { exportAllForSync, importAllForSync } from "./syncPayload";
 
 const LS_CODE = "prikorm.familyCode";
 const LS_REMOTE_TS = "prikorm.remoteUpdatedAt"; // строка timestamptz
+
+// ✅ для индикатора статуса синхронизации
 const LS_SYNC_STATUS = "prikorm.sync.status"; // "ok" | "error" | "idle"
 const LS_SYNC_PUSH_AT = "prikorm.sync.lastPushAt"; // ISO string
 const LS_SYNC_PULL_AT = "prikorm.sync.lastPullAt"; // ISO string
@@ -31,12 +33,16 @@ function setSyncPullAt() {
   window.localStorage.setItem(LS_SYNC_PULL_AT, new Date().toISOString());
 }
 
+function clearSyncError() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(LS_SYNC_ERROR);
+}
+
 function setSyncError(msg: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(LS_SYNC_ERROR, msg);
   setSyncStatus("error");
 }
-
 
 let started = false;
 let pushTimer: any = null;
@@ -75,6 +81,7 @@ export async function pushNow() {
   if (isPushing) return;
 
   isPushing = true;
+
   try {
     const payload = await exportAllForSync();
 
@@ -88,10 +95,16 @@ export async function pushNow() {
       .single();
 
     if (error) throw error;
+
     if (data?.updated_at) setLastRemoteTs(data.updated_at);
-  } catch (e) {
-    // Можно убрать console.log, если не нужно
+
+    // ✅ индикатор
+    setSyncStatus("ok");
+    setSyncPushAt();
+    clearSyncError();
+  } catch (e: any) {
     console.log("AutoSync push error:", e);
+    setSyncError("PUSH: " + (e?.message ?? "unknown"));
   } finally {
     isPushing = false;
   }
@@ -115,8 +128,8 @@ export async function pullNow() {
     if (!remoteTs) return;
 
     const lastTs = getLastRemoteTs();
-    // Если это первое подтягивание — просто применяем
-    // Если уже есть timestamp — применяем только если remote новее
+
+    // применяем если удалённый updated_at новее, либо вообще не было отметки
     const shouldApply =
       !lastTs || new Date(remoteTs).getTime() > new Date(lastTs).getTime();
 
@@ -126,14 +139,20 @@ export async function pullNow() {
     try {
       await importAllForSync(data.payload);
       setLastRemoteTs(remoteTs);
+
+      // ✅ индикатор
+      setSyncStatus("ok");
+      setSyncPullAt();
+      clearSyncError();
     } finally {
-      // маленькая задержка, чтобы изменения Dexie успели “улечься” и не вызвать пуш
+      // задержка, чтобы изменения Dexie не вызвали пуш
       setTimeout(() => {
         isApplyingRemote = false;
       }, 800);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.log("AutoSync pull error:", e);
+    setSyncError("PULL: " + (e?.message ?? "unknown"));
   }
 }
 
@@ -147,12 +166,14 @@ export function startAutoSync(intervalMs = 15000) {
 
   if (typeof window === "undefined") return;
 
+  // стартовый статус
+  setSyncStatus("idle");
+
   // 1) Сразу подтянуть при старте
   void pullNow();
 
   // 2) Пулл по таймеру
   pullTimer = setInterval(() => {
-    // тянем только если онлайн
     if (navigator.onLine) void pullNow();
   }, intervalMs);
 
@@ -168,7 +189,7 @@ export function startAutoSync(intervalMs = 15000) {
     void pullNow();
   });
 
-    // 5) Пуш при любых изменениях в Dexie (табличные хуки — без проблем с типами)
+  // 5) Пуш при любых изменениях в Dexie (табличные хуки — без проблем с типами)
   const trigger = () => {
     if (!navigator.onLine) return;
     debouncePush(1200);
@@ -188,7 +209,6 @@ export function startAutoSync(intervalMs = 15000) {
   db.dayMeta.hook("creating", trigger);
   db.dayMeta.hook("updating", trigger);
   db.dayMeta.hook("deleting", trigger);
-
 }
 
 export function stopAutoSync() {
