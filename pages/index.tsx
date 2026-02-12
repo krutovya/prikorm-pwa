@@ -18,12 +18,20 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isoToDate(iso: string) {
+  return new Date(iso + "T00:00:00");
+}
+
 export default function TodayPage() {
-  // SSR-safe: никаких localStorage в инициализации state
+  // SSR-safe: никаких localStorage в init
   const [startDateISO, setStartDateISO] = useState<string>(todayISO());
   const [startLoaded, setStartLoaded] = useState(false);
 
-  // 1) читаем из localStorage ТОЛЬКО на клиенте
+  // ✅ Новое: выбранная дата для отметок (можно прошлые дни)
+  const [selectedDateISO, setSelectedDateISO] = useState<string>(todayISO());
+  const [selectedLoaded, setSelectedLoaded] = useState(false);
+
+  // --- load start date ---
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -36,7 +44,7 @@ export default function TodayPage() {
     }
   }, []);
 
-  // 2) пишем в localStorage ТОЛЬКО на клиенте, и только после загрузки
+  // --- persist start date ---
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!startLoaded) return;
@@ -47,16 +55,41 @@ export default function TodayPage() {
     }
   }, [startDateISO, startLoaded]);
 
+  // --- load selected date ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem("prikorm.selectedDateISO");
+      if (saved) setSelectedDateISO(saved);
+    } catch {
+      // ignore
+    } finally {
+      setSelectedLoaded(true);
+    }
+  }, []);
+
+  // --- persist selected date ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!selectedLoaded) return;
+    try {
+      window.localStorage.setItem("prikorm.selectedDateISO", selectedDateISO);
+    } catch {
+      // ignore
+    }
+  }, [selectedDateISO, selectedLoaded]);
+
+  // День N считаем относительно startDate, но для выбранной даты (а не "сегодня")
   const dayIndex = useMemo(() => {
-    const start = new Date(startDateISO + "T00:00:00");
-    const now = new Date();
-    const diff = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const start = isoToDate(startDateISO);
+    const chosen = isoToDate(selectedDateISO);
+    const diff = Math.floor((chosen.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     return Math.min(Math.max(diff + 1, 1), PLAN.days.length);
-  }, [startDateISO]);
+  }, [startDateISO, selectedDateISO]);
 
   const basePlanDay: PlanDay | undefined = PLAN.days.find((d) => d.dayIndex === dayIndex);
 
-  // Подхватываем пользовательские правки плана для текущего дня
+  // Подхватываем пользовательские правки плана для текущего dayIndex
   const dayOverrides = useLiveQuery(async () => {
     const [o, m] = await Promise.all([
       db.planOverrides.where({ dayIndex }).toArray(),
@@ -76,15 +109,16 @@ export default function TodayPage() {
     };
   }, [basePlanDay, dayOverrides]);
 
+  // ✅ Логи теперь зависят от selectedDateISO (можно прошлые даты)
   const logs = useLiveQuery(async () => {
-    const iso = todayISO();
-    return db.logs.where({ dayIndex, dateISO: iso }).toArray();
-  }, [dayIndex]);
+    return db.logs.where({ dayIndex, dateISO: selectedDateISO }).toArray();
+  }, [dayIndex, selectedDateISO]);
 
   const doneCount = useMemo(() => (logs ?? []).filter((l) => l.done).length, [logs]);
+  const allDone = planDay ? doneCount === planDay.feedings.length : false;
 
   async function toggleDone(time: string, planText: string) {
-    const iso = todayISO();
+    const iso = selectedDateISO;
     const existing = await db.logs.where({ dayIndex, dateISO: iso, time }).first();
     const now = Date.now();
 
@@ -105,7 +139,7 @@ export default function TodayPage() {
   }
 
   async function setDetails(time: string, patch: Partial<FeedingLog>) {
-    const iso = todayISO();
+    const iso = selectedDateISO;
     const existing = await db.logs.where({ dayIndex, dateISO: iso, time }).first();
     const now = Date.now();
 
@@ -125,14 +159,30 @@ export default function TodayPage() {
     await db.logs.update(existing.id!, { ...patch, updatedAt: now });
   }
 
-  const allDone = planDay ? doneCount === planDay.feedings.length : false;
+  function goToday() {
+    setSelectedDateISO(todayISO());
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function shiftDay(delta: number) {
+    const d = isoToDate(selectedDateISO);
+    d.setDate(d.getDate() + delta);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    setSelectedDateISO(`${yyyy}-${mm}-${dd}`);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="mx-auto max-w-md px-4 pt-6">
         <div className={"rounded-3xl p-5 text-white " + (allDone ? "bg-emerald-600" : "bg-gray-900")}>
-          <div className="text-sm opacity-90">{format(new Date(), "dd.MM.yyyy")}</div>
+          {/* ✅ показываем выбранную дату */}
+          <div className="text-sm opacity-90">{format(isoToDate(selectedDateISO), "dd.MM.yyyy")}</div>
           <div className="mt-1 text-2xl font-extrabold">Сегодня</div>
+
           <div className="mt-2 flex items-center gap-2">
             <Badge tone={allDone ? "ok" : "neutral"}>
               {doneCount}/{planDay?.feedings.length ?? 6} выполнено
@@ -148,6 +198,22 @@ export default function TodayPage() {
               onChange={(e) => setStartDateISO(e.target.value)}
               className="mt-1 w-full rounded-xl px-3 py-2 text-gray-900"
             />
+          </div>
+
+          {/* ✅ Новый блок: выбрать дату для отметки (в т.ч. прошлые) */}
+          <div className="mt-3">
+            <label className="text-xs opacity-90">Дата, которую отмечаем (можно прошлые дни)</label>
+            <input
+              type="date"
+              value={selectedDateISO}
+              onChange={(e) => setSelectedDateISO(e.target.value)}
+              className="mt-1 w-full rounded-xl px-3 py-2 text-gray-900"
+            />
+            <div className="mt-2 flex gap-2">
+              <SecondaryButton onClick={() => shiftDay(-1)} className="w-full">← День</SecondaryButton>
+              <SecondaryButton onClick={goToday} className="w-full">Сегодня</SecondaryButton>
+              <SecondaryButton onClick={() => shiftDay(1)} className="w-full">День →</SecondaryButton>
+            </div>
           </div>
         </div>
 
