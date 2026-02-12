@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import planFile from "../data/plan.json";
 import { PlanFile, PlanDay } from "../components/types";
 import { BottomNav } from "../components/BottomNav";
@@ -189,9 +190,24 @@ export default function TodayPage() {
             (allDone ? "bg-emerald-600" : "bg-gray-900")
           }
         >
-          {/* показываем выбранную дату */}
-          <div className="text-sm opacity-90">{format(isoToDate(selectedDateISO), "dd.MM.yyyy")}</div>
-          <div className="mt-1 text-2xl font-extrabold">Сегодня</div>
+          {/* Header + шестерёнка */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm opacity-90">
+                {format(isoToDate(selectedDateISO), "dd.MM.yyyy")}
+              </div>
+              <div className="mt-1 text-2xl font-extrabold">Сегодня</div>
+            </div>
+
+            <Link
+              href="/settings"
+              className="shrink-0 rounded-xl bg-white/10 px-3 py-2 text-white hover:bg-white/20 active:scale-[0.98]"
+              aria-label="Настройки"
+              title="Настройки"
+            >
+              <span className="text-lg">⚙️</span>
+            </Link>
+          </div>
 
           {/* важно: flex-wrap чтобы бейджи не распирали блок на узких экранах */}
           <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -201,23 +217,11 @@ export default function TodayPage() {
             <Badge>День {dayIndex} / {PLAN.days.length}</Badge>
           </div>
 
+          {/* ✅ Оставляем только выбранную дату отметки */}
           <div className="mt-4">
-            <label className="text-xs opacity-90">Дата старта прикорма (для расчёта “Дня N”)</label>
-
-            {/* overflow-hidden + box-border + appearance none = iOS fix */}
-            <div className="mt-1 w-full overflow-hidden rounded-xl">
-              <input
-                type="date"
-                value={startDateISO}
-                onChange={(e) => setStartDateISO(e.target.value)}
-                className={dateInputClass}
-                style={dateInputStyle}
-              />
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <label className="text-xs opacity-90">Дата, которую отмечаем (можно прошлые дни)</label>
+            <label className="text-xs opacity-90">
+              Дата, которую отмечаем (можно прошлые дни)
+            </label>
 
             <div className="mt-1 w-full overflow-hidden rounded-xl">
               <input
