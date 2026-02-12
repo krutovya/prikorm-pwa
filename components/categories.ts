@@ -19,16 +19,46 @@ export const categories: Category[] = [
   { key: "other",     label: "Другое",       icon: "🍽️", colorClass: "bg-gray-500" },
 ];
 
-export function detectCategory(planText: string): Category {
+export function detectCategory(planText: string) {
   const t = (planText || "").toLowerCase();
 
-  if (/(смесь|молоко|гв|ив)/.test(t)) return categories[0];
-  if (/(каша|греч|рис|кукуруз)/.test(t)) return categories.find(c=>c.key==="porridge")!;
-  if (/(кабач|брок|цветн|морков|тыкв|картоф|овощ)/.test(t)) return categories.find(c=>c.key==="vegetable")!;
-  if (/(яблок|груш|банан|фрукт|чернослив)/.test(t)) return categories.find(c=>c.key==="fruit")!;
-  if (/(индейк|кролик|говядин|куриц|рыб)/.test(t)) return categories.find(c=>c.key==="meat")!;
-  if (/(творог|йогурт|кефир)/.test(t)) return categories.find(c=>c.key==="dairy")!;
-  if (/(вода|чай|напит)/.test(t)) return categories.find(c=>c.key==="water")!;
+  // помощник
+  const has = (arr: string[]) => arr.some(w => t.includes(w));
 
-  return categories.find(c=>c.key==="other")!;
+  // ключевые слова (можно расширять)
+  const MEAT = ["мяс", "индейк", "куриц", "говяд", "крол", "рыб", "треск", "лосос", "хек"];
+  const PORRIDGE = ["каша", "греч", "рис", "овся", "кукуруз", "пшенн", "манк"];
+  const VEG = ["кабач", "брокк", "цветн", "тыкв", "морков", "картоф", "пюре овощ", "овощ"];
+  const FRUIT = ["яблок", "груш", "банан", "слив", "персик", "абрик", "фрукт", "пюре фрукт"];
+  const DAIRY = ["йогурт", "кефир", "творог", "ряженк", "биолакт", "молочн"];
+  const DRINKS = ["вода", "чай", "компот", "сок"];
+  const FORMULA = ["смесь", "гв", "ив", "молоко"]; // “молоко” оставим тут, но ниже будет приоритет у молочного/дринков/еды
+
+  // ✅ ВАЖНО: сначала проверяем “еду”, а уже потом смесь
+  if (has(MEAT)) {
+    return { key: "meat", label: "Мясо/рыба", icon: "🍗", colorClass: "bg-orange-500" };
+  }
+  if (has(PORRIDGE)) {
+    return { key: "porridge", label: "Каши", icon: "🥣", colorClass: "bg-amber-500" };
+  }
+  if (has(VEG)) {
+    return { key: "veg", label: "Овощи", icon: "🥦", colorClass: "bg-emerald-500" };
+  }
+  if (has(FRUIT)) {
+    return { key: "fruit", label: "Фрукты", icon: "🍎", colorClass: "bg-rose-500" };
+  }
+  if (has(DAIRY)) {
+    return { key: "dairy", label: "Молочное", icon: "🥛", colorClass: "bg-sky-500" };
+  }
+  if (has(DRINKS)) {
+    return { key: "drinks", label: "Напитки", icon: "💧", colorClass: "bg-cyan-500" };
+  }
+
+  // ✅ Смесь/молоко — ТОЛЬКО если не нашлось ничего выше
+  if (has(FORMULA)) {
+    return { key: "formula", label: "Смесь/молоко", icon: "🍼", colorClass: "bg-blue-500" };
+  }
+
+  return { key: "other", label: "Другое", icon: "🍽️", colorClass: "bg-gray-500" };
 }
+
