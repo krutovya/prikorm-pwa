@@ -1,26 +1,36 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-const tabs = [
-  { href: "/", label: "Сегодня" },
-  { href: "/plan", label: "План" },
-  { href: "/reports", label: "Отчёты" },
-];
-
 export function BottomNav() {
-  const r = useRouter();
+  const router = useRouter();
+
+  const itemClass = (path: string) =>
+    "flex flex-1 flex-col items-center justify-center transition-all " +
+    (router.pathname === path
+      ? "text-emerald-600 font-semibold"
+      : "text-gray-500");
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-      <div className="mx-auto max-w-md grid grid-cols-3">
-        {tabs.map(t => {
-          const active = r.pathname === t.href;
-          return (
-            <Link key={t.href} href={t.href} className={"py-3 text-center text-sm font-semibold " + (active ? "text-gray-900" : "text-gray-500")}>
-              {t.label}
-            </Link>
-          );
-        })}
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+      <div className="mx-auto flex max-w-md h-20"> 
+        {/* ↑ высота была меньше — теперь 80px */}
+
+        <Link href="/" className={itemClass("/")}>
+          <span className="text-lg">📅</span>
+          <span className="mt-1 text-sm">Сегодня</span>
+        </Link>
+
+        <Link href="/plan" className={itemClass("/plan")}>
+          <span className="text-lg">📝</span>
+          <span className="mt-1 text-sm">План</span>
+        </Link>
+
+        <Link href="/reports" className={itemClass("/reports")}>
+          <span className="text-lg">📊</span>
+          <span className="mt-1 text-sm">Отчёты</span>
+        </Link>
       </div>
-    </nav>
+    </div>
   );
 }
+
