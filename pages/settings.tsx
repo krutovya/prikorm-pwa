@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "../components/BottomNav";
 import { Card, SecondaryButton, PrimaryButton } from "../components/ui";
 import { format } from "date-fns";
@@ -20,14 +20,43 @@ function generateFamilyCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function fmtTime(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(d, "dd.MM HH:mm:ss");
+}
+
 export default function SettingsPage() {
   const [startDateISO, setStartDateISO] = useState<string>(todayISO());
   const [loaded, setLoaded] = useState(false);
 
   const [familyCode, setFamilyCode] = useState<string>("");
   const [familyInput, setFamilyInput] = useState("");
-
   const [syncBusy, setSyncBusy] = useState(false);
+
+  // --- индикатор синка ---
+  const [syncStatus, setSyncStatus] = useState<"idle" | "ok" | "error">("idle");
+  const [lastPushAt, setLastPushAt] = useState<string | null>(null);
+  const [lastPullAt, setLastPullAt] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  // читать статусы из localStorage периодически
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const read = () => {
+      const st = (window.localStorage.getItem("prikorm.sync.status") as any) ?? "idle";
+      setSyncStatus(st === "ok" || st === "error" ? st : "idle");
+      setLastPushAt(window.localStorage.getItem("prikorm.sync.lastPushAt"));
+      setLastPullAt(window.localStorage.getItem("prikorm.sync.lastPullAt"));
+      setLastError(window.localStorage.getItem("prikorm.sync.lastError"));
+    };
+
+    read();
+    const t = setInterval(read, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -107,6 +136,12 @@ export default function SettingsPage() {
     }
   }
 
+  const syncPill = useMemo(() => {
+    if (syncStatus === "error") return { text: "Ошибка 🔴", cls: "bg-rose-100 text-rose-700 border-rose-200" };
+    if (syncStatus === "ok") return { text: "Синхронизировано ✅", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+    return { text: "Ожидание…", cls: "bg-gray-100 text-gray-700 border-gray-200" };
+  }, [syncStatus]);
+
   const dateInputClass =
     "w-full box-border rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 text-sm leading-5";
   const dateInputStyle = { WebkitAppearance: "none", appearance: "none" } as any;
@@ -145,7 +180,39 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* СИНХРОНИЗАЦИЯ */}
+        {/* СТАТУС СИНХРОНИЗАЦИИ */}
+        <Card className="mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-bold text-gray-900">Статус синхронизации</div>
+            <div className={"shrink-0 rounded-full border px-3 py-1 text-xs font-semibold " + syncPill.cls}>
+              {syncPill.text}
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="font-semibold text-gray-700">Последний PUSH</div>
+              <div className="mt-1">{fmtTime(lastPushAt)}</div>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="font-semibold text-gray-700">Последний PULL</div>
+              <div className="mt-1">{fmtTime(lastPullAt)}</div>
+            </div>
+          </div>
+
+          {lastError && (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+              <div className="font-semibold">Последняя ошибка</div>
+              <div className="mt-1 break-words">{lastError}</div>
+            </div>
+          )}
+
+          <div className="mt-3 text-xs text-gray-500">
+            Автосинхронизация работает в фоне, когда приложение открыто и есть интернет.
+          </div>
+        </Card>
+
+        {/* СИНХРОНИЗАЦИЯ (код семьи + ручные кнопки) */}
         <Card className="mt-4">
           <div className="text-sm font-bold text-gray-900">Синхронизация (Код семьи)</div>
           <div className="mt-1 text-xs text-gray-600">
