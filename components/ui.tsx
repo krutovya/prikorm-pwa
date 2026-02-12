@@ -20,19 +20,33 @@ export function Card({ className, ...props }: CardProps) {
 }
 
 /** BADGE */
-export type BadgeProps = React.HTMLAttributes<HTMLSpanElement>;
+export type BadgeTone = "neutral" | "ok" | "warn" | "danger";
+export type BadgeProps = React.HTMLAttributes<HTMLSpanElement> & {
+  tone?: BadgeTone;
+};
 
-export function Badge({ className, ...props }: BadgeProps) {
+export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
+  const toneClass =
+    tone === "ok"
+      ? "bg-emerald-100 text-emerald-700"
+      : tone === "warn"
+      ? "bg-amber-100 text-amber-700"
+      : tone === "danger"
+      ? "bg-rose-100 text-rose-700"
+      : "bg-gray-100 text-gray-700";
+
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-700",
+        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold",
+        toneClass,
         className
       )}
       {...props}
     />
   );
 }
+
 
 /** BUTTONS */
 type BtnProps = React.ButtonHTMLAttributes<HTMLButtonElement>;
