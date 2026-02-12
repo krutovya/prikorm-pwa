@@ -5,10 +5,27 @@ import Head from "next/head";
 import { startAutoSync } from "../components/autoSync";
 import "../styles/globals.css";
 
+const LS_THEME = "prikorm.theme"; // "light" | "dark"
+
+function applyTheme(theme: "light" | "dark") {
+  if (typeof window === "undefined") return;
+  const root = document.documentElement; // <html>
+  if (theme === "dark") root.classList.add("dark");
+  else root.classList.remove("dark");
+}
+
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
-    // Автосинхронизация: подтягиваем при старте + проверяем облако каждые 15 секунд
+    // Автосинхронизация
     startAutoSync(15000);
+
+    // Тема
+    try {
+      const saved = (window.localStorage.getItem(LS_THEME) as "light" | "dark" | null) ?? "light";
+      applyTheme(saved);
+    } catch {
+      applyTheme("light");
+    }
   }, []);
 
   return (
