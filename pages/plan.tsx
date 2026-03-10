@@ -45,6 +45,9 @@ export default function PlanPage() {
   const [showTransferTools, setShowTransferTools] = useState(false);
   const [importText, setImportText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Подтягиваем дату старта (для вычисления текущего дня)
   const [startDateISO, setStartDateISO] = useState<string>(todayISO());
@@ -86,6 +89,17 @@ export default function PlanPage() {
 
     return () => clearTimeout(t);
   }, [todayDayIndex, searchQuery]);
+
+  // Автофокус на поиск при открытии
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    const t = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
+
+    return () => clearTimeout(t);
+  }, [searchOpen]);
 
   // Overrides (правки плана)
   const overrides = useLiveQuery(async () => {
@@ -156,6 +170,16 @@ export default function PlanPage() {
     );
   }
 
+  function openSearch() {
+    setSearchOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }
+
   async function onExport() {
     const payload = await exportOverrides();
     const txt = JSON.stringify(payload, null, 2);
@@ -176,51 +200,75 @@ export default function PlanPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <div className="mx-auto max-w-md px-4 pt-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-2xl font-extrabold text-gray-900">План</div>
-            <div className="mt-1 text-sm text-gray-600">
-              180 дней • 6 кормлений в день • текущий день: {todayDayIndex}
+      <div
+        className={
+          searchOpen
+            ? "sticky top-0 z-30 border-b border-gray-200 bg-gray-50/95 backdrop-blur"
+            : ""
+        }
+      >
+        <div className="mx-auto max-w-md px-4 pt-6 pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-extrabold text-gray-900">План</div>
+              <div className="mt-1 text-sm text-gray-600">
+                180 дней • 6 кормлений в день • текущий день: {todayDayIndex}
+              </div>
             </div>
+
+            <SecondaryButton onClick={() => setShowTransferTools((v) => !v)}>
+              {showTransferTools ? "Скрыть JSON" : "JSON / перенос"}
+            </SecondaryButton>
           </div>
 
-          <SecondaryButton onClick={() => setShowTransferTools((v) => !v)}>
-            {showTransferTools ? "Скрыть JSON" : "JSON / перенос"}
-          </SecondaryButton>
-        </div>
+          {searchOpen && (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-bold text-gray-900">Поиск по плану</div>
+                <button
+                  onClick={closeSearch}
+                  className="rounded-full px-2 py-1 text-sm font-bold text-gray-500 hover:bg-gray-100"
+                  aria-label="Закрыть поиск"
+                >
+                  ×
+                </button>
+              </div>
 
-        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="text-sm font-bold text-gray-900">Поиск по плану</div>
-          <div className="mt-1 text-xs text-gray-600">
-            Введи продукт или слово, например: брокколи, кабачок, каша
-          </div>
+              <div className="mt-1 text-xs text-gray-600">
+                Введи продукт или слово, например: брокколи, кабачок, каша
+              </div>
 
-          <div className="mt-3 flex gap-2">
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Например: брокколи"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-            />
-            {searchQuery.trim() && (
-              <SecondaryButton onClick={() => setSearchQuery("")}>
-                Очистить
-              </SecondaryButton>
-            )}
-          </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Например: брокколи"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                />
+                {searchQuery.trim() && (
+                  <SecondaryButton onClick={() => setSearchQuery("")}>
+                    Очистить
+                  </SecondaryButton>
+                )}
+              </div>
 
-          {normalizedQuery ? (
-            <div className="mt-3 text-xs text-gray-600">
-              Найдено дней: <span className="font-bold text-gray-900">{filteredDays.length}</span>
-            </div>
-          ) : (
-            <div className="mt-3 text-xs text-gray-500">
-              Поиск покажет, в какие дни встречается нужный продукт
+              {normalizedQuery ? (
+                <div className="mt-3 text-xs text-gray-600">
+                  Найдено дней:{" "}
+                  <span className="font-bold text-gray-900">{filteredDays.length}</span>
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-gray-500">
+                  Поиск покажет, в какие дни встречается нужный продукт
+                </div>
+              )}
             </div>
           )}
         </div>
+      </div>
 
+      <div className="mx-auto max-w-md px-4">
         {showTransferTools && (
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
             <div className="text-sm font-bold">Резервная копия / перенос</div>
@@ -254,7 +302,8 @@ export default function PlanPage() {
         <div className="mt-4 space-y-3">
           {filteredDays.length === 0 && normalizedQuery ? (
             <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-              По запросу <span className="font-bold text-gray-900">«{searchQuery}»</span> ничего не найдено.
+              По запросу <span className="font-bold text-gray-900">«{searchQuery}»</span>{" "}
+              ничего не найдено.
             </div>
           ) : (
             filteredDays.map((d) => {
@@ -376,6 +425,17 @@ export default function PlanPage() {
           )}
         </div>
       </div>
+
+      {!searchOpen && (
+        <button
+          onClick={openSearch}
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg"
+          aria-label="Открыть поиск"
+          title="Поиск"
+        >
+          🔍
+        </button>
+      )}
 
       <BottomNav />
     </div>
