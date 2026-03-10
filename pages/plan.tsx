@@ -36,10 +36,15 @@ function dateToISO(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function normalizeText(text: string) {
+  return text.toLowerCase().trim();
+}
+
 export default function PlanPage() {
   const [editingDays, setEditingDays] = useState<number[]>([]);
   const [showTransferTools, setShowTransferTools] = useState(false);
   const [importText, setImportText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Подтягиваем дату старта (для вычисления текущего дня)
   const [startDateISO, setStartDateISO] = useState<string>(todayISO());
@@ -71,6 +76,7 @@ export default function PlanPage() {
 
   // Скролл к текущему дню при открытии страницы
   useEffect(() => {
+    if (searchQuery.trim()) return;
     const el = dayRefs.current[todayDayIndex];
     if (!el) return;
 
@@ -79,7 +85,7 @@ export default function PlanPage() {
     }, 150);
 
     return () => clearTimeout(t);
-  }, [todayDayIndex]);
+  }, [todayDayIndex, searchQuery]);
 
   // Overrides (правки плана)
   const overrides = useLiveQuery(async () => {
@@ -105,6 +111,20 @@ export default function PlanPage() {
       })),
     }));
   }, [overrides]);
+
+  const normalizedQuery = useMemo(() => normalizeText(searchQuery), [searchQuery]);
+
+  const filteredDays = useMemo(() => {
+    if (!normalizedQuery) return merged;
+
+    return merged.filter((d) => {
+      const inFocus = normalizeText(d.focus ?? "").includes(normalizedQuery);
+      const inFeedings = d.feedings.some((f) =>
+        normalizeText(f.planText ?? "").includes(normalizedQuery)
+      );
+      return inFocus || inFeedings;
+    });
+  }, [merged, normalizedQuery]);
 
   // Логи всех дней (для подсветки "всё выполнено")
   const allLogs = useLiveQuery(async () => {
@@ -170,6 +190,37 @@ export default function PlanPage() {
           </SecondaryButton>
         </div>
 
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="text-sm font-bold text-gray-900">Поиск по плану</div>
+          <div className="mt-1 text-xs text-gray-600">
+            Введи продукт или слово, например: брокколи, кабачок, каша
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Например: брокколи"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            />
+            {searchQuery.trim() && (
+              <SecondaryButton onClick={() => setSearchQuery("")}>
+                Очистить
+              </SecondaryButton>
+            )}
+          </div>
+
+          {normalizedQuery ? (
+            <div className="mt-3 text-xs text-gray-600">
+              Найдено дней: <span className="font-bold text-gray-900">{filteredDays.length}</span>
+            </div>
+          ) : (
+            <div className="mt-3 text-xs text-gray-500">
+              Поиск покажет, в какие дни встречается нужный продукт
+            </div>
+          )}
+        </div>
+
         {showTransferTools && (
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
             <div className="text-sm font-bold">Резервная копия / перенос</div>
@@ -201,122 +252,128 @@ export default function PlanPage() {
         )}
 
         <div className="mt-4 space-y-3">
-          {merged.map((d) => {
-            const dateISO = startLoaded ? dayIndexToDateISO(d.dayIndex) : "";
-            const doneCount = startLoaded ? (doneMap.get(`${d.dayIndex}|${dateISO}`) ?? 0) : 0;
-            const allDone = doneCount >= (d.feedings?.length ?? 6);
-            const isEditing = editingDays.includes(d.dayIndex);
+          {filteredDays.length === 0 && normalizedQuery ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+              По запросу <span className="font-bold text-gray-900">«{searchQuery}»</span> ничего не найдено.
+            </div>
+          ) : (
+            filteredDays.map((d) => {
+              const dateISO = startLoaded ? dayIndexToDateISO(d.dayIndex) : "";
+              const doneCount = startLoaded ? (doneMap.get(`${d.dayIndex}|${dateISO}`) ?? 0) : 0;
+              const allDone = doneCount >= (d.feedings?.length ?? 6);
+              const isEditing = editingDays.includes(d.dayIndex);
 
-            const wrapClass =
-              "rounded-2xl border p-4 " +
-              (allDone
-                ? "border-emerald-300 bg-emerald-50"
-                : "border-gray-200 bg-white");
+              const wrapClass =
+                "rounded-2xl border p-4 " +
+                (allDone
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-gray-200 bg-white");
 
-            return (
-              <div
-                key={d.dayIndex}
-                ref={(el) => {
-                  dayRefs.current[d.dayIndex] = el;
-                }}
-                className={wrapClass}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
-                      <span>День {d.dayIndex}</span>
+              return (
+                <div
+                  key={d.dayIndex}
+                  ref={(el) => {
+                    dayRefs.current[d.dayIndex] = el;
+                  }}
+                  className={wrapClass}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
+                        <span>День {d.dayIndex}</span>
 
-                      {d.dayIndex === todayDayIndex && (
-                        <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[11px] text-white">
-                          СЕГОДНЯ
-                        </span>
+                        {d.dayIndex === todayDayIndex && (
+                          <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[11px] text-white">
+                            СЕГОДНЯ
+                          </span>
+                        )}
+
+                        <SecondaryButton
+                          onClick={() => toggleDayEditing(d.dayIndex)}
+                          className="px-3 py-1 text-xs"
+                        >
+                          {isEditing ? "Готово" : "Редактировать"}
+                        </SecondaryButton>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Badge>Неделя {d.week ?? "-"}</Badge>
+                      {startLoaded && (
+                        <Badge tone={allDone ? "ok" : "neutral"}>
+                          {doneCount}/{d.feedings.length}
+                        </Badge>
                       )}
-
-                      <SecondaryButton
-                        onClick={() => toggleDayEditing(d.dayIndex)}
-                        className="px-3 py-1 text-xs"
-                      >
-                        {isEditing ? "Готово" : "Редактировать"}
-                      </SecondaryButton>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Badge>Неделя {d.week ?? "-"}</Badge>
-                    {startLoaded && (
-                      <Badge tone={allDone ? "ok" : "neutral"}>
-                        {doneCount}/{d.feedings.length}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {d.focus && (
-                  <div className="mt-2">
-                    {!isEditing ? (
-                      <div className="text-xs text-gray-600">{d.focus}</div>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          defaultValue={d.focus}
-                          onBlur={(e) => upsertDayFocus(d.dayIndex, e.target.value)}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs"
-                          placeholder="Фокус дня / недели"
-                        />
-                        <SecondaryButton
-                          onClick={() => resetDayFocus(d.dayIndex)}
-                          className="w-full"
-                        >
-                          Сбросить фокус (как в файле)
-                        </SecondaryButton>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-3 space-y-2">
-                  {d.feedings.map((f) => {
-                    const cat = detectCategory(f.planText);
-
-                    return (
-                      <div key={f.time} className="flex gap-3">
-                        <div className={"w-2 rounded-full " + cat.colorClass} />
-
-                        <div className="flex-1">
-                          <div className="text-xs font-semibold text-gray-900">
-                            {f.time} <span className="ml-1">{cat.icon}</span>
-                          </div>
-
-                          {!isEditing ? (
-                            <div className="whitespace-pre-wrap text-xs text-gray-700">
-                              {f.planText}
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <textarea
-                                defaultValue={f.planText}
-                                onBlur={(e) =>
-                                  upsertPlanOverride(d.dayIndex, f.time, e.target.value)
-                                }
-                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs"
-                                rows={3}
-                              />
-                              <SecondaryButton
-                                onClick={() => resetPlanOverride(d.dayIndex, f.time)}
-                                className="w-full"
-                              >
-                                Сбросить (как в файле)
-                              </SecondaryButton>
-                            </div>
-                          )}
+                  {d.focus && (
+                    <div className="mt-2">
+                      {!isEditing ? (
+                        <div className="text-xs text-gray-600">{d.focus}</div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            defaultValue={d.focus}
+                            onBlur={(e) => upsertDayFocus(d.dayIndex, e.target.value)}
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs"
+                            placeholder="Фокус дня / недели"
+                          />
+                          <SecondaryButton
+                            onClick={() => resetDayFocus(d.dayIndex)}
+                            className="w-full"
+                          >
+                            Сбросить фокус (как в файле)
+                          </SecondaryButton>
                         </div>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-3 space-y-2">
+                    {d.feedings.map((f) => {
+                      const cat = detectCategory(f.planText);
+
+                      return (
+                        <div key={f.time} className="flex gap-3">
+                          <div className={"w-2 rounded-full " + cat.colorClass} />
+
+                          <div className="flex-1">
+                            <div className="text-xs font-semibold text-gray-900">
+                              {f.time} <span className="ml-1">{cat.icon}</span>
+                            </div>
+
+                            {!isEditing ? (
+                              <div className="whitespace-pre-wrap text-xs text-gray-700">
+                                {f.planText}
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <textarea
+                                  defaultValue={f.planText}
+                                  onBlur={(e) =>
+                                    upsertPlanOverride(d.dayIndex, f.time, e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs"
+                                  rows={3}
+                                />
+                                <SecondaryButton
+                                  onClick={() => resetPlanOverride(d.dayIndex, f.time)}
+                                  className="w-full"
+                                >
+                                  Сбросить (как в файле)
+                                </SecondaryButton>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 
